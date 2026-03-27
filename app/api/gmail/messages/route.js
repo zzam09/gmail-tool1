@@ -1,24 +1,12 @@
 import { getServerSession } from "next-auth";
 import { getGmailClient } from "@/lib/gmail";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { db } from "@/lib/db";
 
 export async function GET(req) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
-  // Set up token refresh callback
-  const onTokenRefresh = async (newTokens) => {
-    console.log('🔄 User tokens refreshed, updating database...');
-    try {
-      await db.updateTokens(session.user.email, newTokens.access_token, newTokens.refresh_token);
-      console.log('✅ User tokens updated in database');
-    } catch (error) {
-      console.error('❌ Failed to update user tokens in database:', error);
-    }
-  };
-
-  const gmail = getGmailClient(session.accessToken, session.refreshToken, onTokenRefresh);
+  const gmail = getGmailClient(session.accessToken, session.refreshToken);
   const { searchParams } = new URL(req.url);
   const pageToken = searchParams.get("pageToken") || undefined;
   const messageId = searchParams.get("id");

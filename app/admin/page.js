@@ -51,30 +51,6 @@ function extractName(from = "") {
   return match ? match[1].trim() : from.replace(/<.*?>/, "").trim() || from;
 }
 
-function getTokenStatusText(userId) {
-  const status = tokenStatuses[userId];
-  if (!status) return "⚠ No tokens";
-  
-  switch (status) {
-    case 'valid': return "✓ Authenticated";
-    case 'expired': return "⚠ Tokens expired";
-    case 'error': return "❌ Error";
-    default: return "⚠ Unknown status";
-  }
-}
-
-function getTokenStatusColor(userId) {
-  const status = tokenStatuses[userId];
-  if (!status) return "#ff3b30";
-  
-  switch (status) {
-    case 'valid': return "#34c759";
-    case 'expired': return "#ff9500";
-    case 'error': return "#ff3b30";
-    default: return "#8e8e93";
-  }
-}
-
 export default function AdminDashboard() {
   const { data: session } = useSession();
   const { t, mode, toggle } = useTheme();
@@ -86,8 +62,8 @@ export default function AdminDashboard() {
   const [messageDetail, setMessageDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [nextPageToken, setNextPageToken] = useState(null);
-  const [reauthNeeded, setReauthNeeded] = useState(null);
-  const [tokenStatuses, setTokenStatuses] = useState({});
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [tokenStatus, setTokenStatus] = useState({});
 
   useEffect(() => {
     if (session) loadUsers();
@@ -99,30 +75,28 @@ export default function AdminDashboard() {
 
   async function loadUsers() {
     try {
-      const res = await fetch('/api/users');
-      const data = await res.json();
-      console.log('Loaded users:', data);
-      setUsers(data.users || []);
+      const [usersRes, statusRes] = await Promise.all([
+        fetch('/api/users'),
+        fetch('/api/debug/token-status')
+      ]);
       
-      // Check token status for all users
-      const statuses = {};
-      for (const user of data.users || []) {
-        if (user.hasTokens) {
-          try {
-            const statusRes = await fetch(`/api/users/${user.id}/token-status`);
-            const statusData = await statusRes.json();
-            statuses[user.id] = statusData.status;
-          } catch (error) {
-            console.error(`Failed to check token status for ${user.email}:`, error);
-            statuses[user.id] = 'error';
-          }
-        }
+      const usersData = await usersRes.json();
+      const statusData = await statusRes.json();
+      
+      console.log('Loaded users:', usersData);
+      setUsers(usersData.users || []);
+      
+      if (statusData.success) {
+        const statusMap = statusData.users.reduce((acc, user) => {
+          acc[user.id] = user;
+          return acc;
+        }, {});
+        setTokenStatus(statusMap);
       }
-      setTokenStatuses(statuses);
       
-      if (data.users?.length > 0 && !selectedUser) {
+      if (usersData.users?.length > 0 && !selectedUser) {
         // Find first user with a valid ID
-        const validUser = data.users.find(user => user && user.id);
+        const validUser = usersData.users.find(user => user && user.id);
         if (validUser) {
           console.log('Setting selected user:', validUser);
           setSelectedUser(validUser);
@@ -133,6 +107,23 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Failed to load users:', error);
     }
+  }
+
+  // Function to get detailed token status
+  async function loadDetailedTokenStatus() {
+    try {
+      const res = await fetch('/api/debug/token-status');
+      const data = await res.json();
+      if (data.success) {
+        return data.users.reduce((acc, user) => {
+          acc[user.id] = user;
+          return acc;
+        }, {});
+      }
+    } catch (error) {
+      console.error('Failed to load detailed token status:', error);
+    }
+    return {};
   }
 
   async function loadMessages(pageToken = null) {
@@ -158,7 +149,7 @@ export default function AdminDashboard() {
       if (data.error) {
         console.error('API Error:', data.error);
         if (data.requiresReauth) {
-          setReauthNeeded(selectedUser);
+          alert(`User ${selectedUser.email} needs to re-authenticate. Please have them log in again.`);
         }
         return;
       }
@@ -199,72 +190,39 @@ export default function AdminDashboard() {
     }
   }
 
-  // Re-authentication component
-  const ReauthModal = () => {
-    if (!reauthNeeded) return null;
+  async function deleteUser(userId, userEmail) {
+    if (!confirm(`Are you sure you want to delete ${userEmail}? This action cannot be undone.`)) {
+      return;
+    }
     
-    return (
-      <div style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "rgba(0,0,0,0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000
-      }}>
-        <div style={{
-          background: t.card,
-          padding: "32px",
-          borderRadius: "16px",
-          maxWidth: "400px",
-          width: "90%",
-          border: `1px solid ${t.border}`,
-          textAlign: "center"
-        }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔄</div>
-          <h3 style={{ margin: "0 0 16px", color: t.text, fontSize: "18px", fontWeight: "600" }}>
-            Re-authentication Required
-          </h3>
-          <p style={{ margin: "0 0 24px", color: t.sub, fontSize: "14px", lineHeight: "1.5" }}>
-            User <strong>{reauthNeeded.email}</strong> needs to re-authenticate with Gmail. 
-            Please have them sign in again to refresh their access tokens.
-          </p>
-          <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-            <button onClick={() => setReauthNeeded(null)} style={{
-              background: t.inputBg,
-              border: `1px solid ${t.border}`,
-              borderRadius: "8px",
-              padding: "10px 20px",
-              fontSize: "14px",
-              cursor: "pointer",
-              color: t.text
-            }}>
-              Dismiss
-            </button>
-            <button onClick={() => {
-              window.open(`/`, '_blank');
-              setReauthNeeded(null);
-            }} style={{
-              background: t.accent,
-              border: "none",
-              borderRadius: "8px",
-              padding: "10px 20px",
-              fontSize: "14px",
-              cursor: "pointer",
-              color: "#fff",
-              fontWeight: "500"
-            }}>
-              Open Sign-in Page
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+      const data = await res.json();
+      
+      if (data.success) {
+        console.log('User deleted successfully:', data.deletedUser);
+        
+        // Refresh users list
+        await loadUsers();
+        
+        // Clear selected user if it was deleted
+        if (selectedUser?.id === userId) {
+          setSelectedUser(null);
+          setMessages([]);
+          setMessageDetail(null);
+          setSelectedMessage(null);
+        }
+        
+        setDeleteConfirm(null);
+      } else {
+        console.error('Failed to delete user:', data.error);
+        alert('Failed to delete user: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+      alert('Failed to delete user: ' + error.message);
+    }
+  }
 
   if (!session) {
     return (
@@ -313,31 +271,62 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <div style={{ flex: 1, overflowY: "auto" }}>
-            {users.filter(user => user && user.id).map(user => (
+            {users.filter(user => user && user.id).map(user => {
+              const detailedStatus = tokenStatus[user.id];
+              const statusIcon = detailedStatus?.icon || "❌";
+              const statusText = detailedStatus?.status || "No Tokens";
+              const statusColor = detailedStatus?.color || "#ff3b30";
+              
+              return (
               <div
                 key={user.id}
-                onClick={() => setSelectedUser(user)}
                 style={{
                   display: "flex", alignItems: "center", gap: 12,
                   padding: "12px", borderRadius: 10, cursor: "pointer",
                   background: selectedUser?.id === user.id ? t.selected : "none",
                   marginBottom: 4,
+                  position: "relative"
                 }}
               >
-                <Avatar name={user.name} />
-                <div style={{ flex: 1, overflow: "hidden" }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: t.text }}>
-                    {user.name}
-                  </div>
-                  <div style={{ fontSize: 12, color: t.sub, overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {user.email}
-                  </div>
-                  <div style={{ fontSize: 11, color: getTokenStatusColor(user.id), fontWeight: 500 }}>
-                    {getTokenStatusText(user.id)}
+                <div onClick={() => setSelectedUser(user)} style={{ flex: 1, display: "flex", alignItems: "center", gap: 12 }}>
+                  <Avatar name={user.name} />
+                  <div style={{ flex: 1, overflow: "hidden" }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: t.text }}>
+                      {user.name}
+                    </div>
+                    <div style={{ fontSize: 12, color: t.sub, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {user.email}
+                    </div>
+                    <div style={{ fontSize: 11, color: statusColor }}>
+                      {statusIcon} {statusText}
+                    </div>
                   </div>
                 </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteConfirm({ id: user.id, email: user.email });
+                  }}
+                  style={{
+                    background: "#ff3b30",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "6px 10px",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    color: "#fff",
+                    fontWeight: 600,
+                    opacity: 0.8,
+                    transition: "opacity 0.2s"
+                  }}
+                  onMouseOver={(e) => e.target.style.opacity = "1"}
+                  onMouseOut={(e) => e.target.style.opacity = "0.8"}
+                >
+                  🗑️
+                </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
         
@@ -469,9 +458,53 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
-      
-      {/* Re-authentication Modal */}
-      <ReauthModal />
     </div>
   );
+
+  // Delete Confirmation Modal
+  if (deleteConfirm) {
+    return (
+      <div style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 1000
+      }}>
+        <div style={{
+          background: t.card, borderRadius: 12, padding: 24,
+          maxWidth: 400, width: "90%", border: `1px solid ${t.border}`
+        }}>
+          <h3 style={{ margin: "0 0 16px", color: t.text, fontSize: 18 }}>
+            Delete User?
+          </h3>
+          <p style={{ margin: "0 0 24px", color: t.sub, fontSize: 14, lineHeight: 1.5 }}>
+            Are you sure you want to delete <strong>{deleteConfirm.email}</strong>? 
+            This will permanently remove their account and all associated data. 
+            This action cannot be undone.
+          </p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+            <button
+              onClick={() => setDeleteConfirm(null)}
+              style={{
+                background: t.inputBg, border: `1px solid ${t.border}`,
+                borderRadius: 8, padding: "10px 16px", fontSize: 14,
+                cursor: "pointer", color: t.text
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => deleteUser(deleteConfirm.id, deleteConfirm.email)}
+              style={{
+                background: "#ff3b30", border: "none",
+                borderRadius: 8, padding: "10px 16px", fontSize: 14,
+                cursor: "pointer", color: "#fff", fontWeight: 600
+              }}
+            >
+              Delete User
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 }
