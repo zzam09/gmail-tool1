@@ -131,8 +131,8 @@ export default function LandingPage() {
             textAlign: "center", marginBottom: 80,
             animation: "fadeInUp 1s ease-out",
           }}>
-            <h1 style={{
-              fontSize: clamp(48, 8, 72), fontWeight: 800,
+            <h1 className="clamp-text" style={{
+              fontWeight: 800,
               color: "#fff", marginBottom: 24,
               lineHeight: 1.2, textShadow: "0 2px 20px rgba(0,0,0,0.3)",
             }}>
@@ -140,8 +140,8 @@ export default function LandingPage() {
               <br />
               Digital Experience
             </h1>
-            <p style={{
-              fontSize: clamp(18, 4, 24), color: "rgba(255,255,255,0.9)",
+            <p className="clamp-subtext" style={{
+              color: "rgba(255,255,255,0.9)",
               marginBottom: 40, lineHeight: 1.6,
               maxWidth: 600, margin: "0 auto 40px",
             }}>
@@ -228,8 +228,8 @@ export default function LandingPage() {
             textAlign: "center", padding: "60px 20px",
             animation: "fadeIn 2s ease-out",
           }}>
-            <div style={{
-              fontSize: clamp(24, 6, 32), fontWeight: 300,
+            <div className="clamp-quote" style={{
+              fontWeight: 300,
               color: "rgba(255,255,255,0.9)", lineHeight: 1.6,
               marginBottom: 16, fontStyle: "italic",
               maxWidth: 800, margin: "0 auto 16px",
@@ -268,6 +268,22 @@ export default function LandingPage() {
         }
         @function clamp($min, $viewport-unit, $max) {
           return max($min, min($max, $viewport-unit * 1vw));
+        }
+        
+        /* Fallback clamp for browsers that don't support CSS clamp() */
+        .clamp-text {
+          font-size: 48px;
+          font-size: clamp(48px, 4vw, 72px);
+        }
+        
+        .clamp-subtext {
+          font-size: 18px;
+          font-size: clamp(18px, 2vw, 24px);
+        }
+        
+        .clamp-quote {
+          font-size: 24px;
+          font-size: clamp(24px, 3vw, 32px);
         }
       `}</style>
     </div>
