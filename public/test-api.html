@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multi-User API Test</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+        button { padding: 8px 16px; margin: 5px; background: #007aff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 4px; font-family: monospace; white-space: pre-wrap; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        .user-card { margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }
+        .user-card:hover { background: #f5f5f5; }
+        .selected { background: #e3f2fd; border-color: #2196f3; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Multi-User Gmail API Test</h1>
+    
+    <div class="test-section">
+        <h2>1. Test Users API</h2>
+        <button onclick="testUsers()">Load Users</button>
+        <div id="users-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Test Messages API</h2>
+        <div id="user-selection"></div>
+        <button onclick="testMessages()">Load Messages</button>
+        <div id="messages-result" class="result"></div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost:3001';
+        let selectedUser = null;
+
+        async function testUsers() {
+            const resultDiv = document.getElementById('users-result');
+            resultDiv.textContent = 'Loading users...';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/api/users`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ Found ${data.users?.length || 0} users\n\n${JSON.stringify(data, null, 2)}`;
+                    
+                    // Populate user selection
+                    const selectionDiv = document.getElementById('user-selection');
+                    selectionDiv.innerHTML = '<h3>Select User:</h3>';
+                    
+                    data.users?.forEach(user => {
+                        const card = document.createElement('div');
+                        card.className = 'user-card';
+                        card.innerHTML = `
+                            <strong>${user.name}</strong><br>
+                            <small>${user.email}</small><br>
+                            <small>Status: ${user.hasTokens ? '✓ Authenticated' : '⚠ No tokens'}</small>
+                        `;
+                        card.onclick = () => selectUser(user, card);
+                        selectionDiv.appendChild(card);
+                    });
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ Error ${response.status}: ${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Network Error: ${error.message}`;
+            }
+        }
+
+        function selectUser(user, card) {
+            selectedUser = user;
+            
+            // Update UI
+            document.querySelectorAll('.user-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            
+            console.log('Selected user:', user);
+        }
+
+        async function testMessages() {
+            const resultDiv = document.getElementById('messages-result');
+            
+            if (!selectedUser) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ Please select a user first';
+                return;
+            }
+
+            if (!selectedUser.hasTokens) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ Selected user has no authentication tokens';
+                return;
+            }
+
+            resultDiv.textContent = `Loading messages for ${selectedUser.email}...`;
+            
+            try {
+                const response = await fetch(`${BASE_URL}/api/admin/users/${selectedUser.id}/messages`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ Found ${data.messages?.length || 0} messages for ${selectedUser.email}\n\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ Error ${response.status}: ${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Network Error: ${error.message}`;
+            }
+        }
+
+        // Auto-test users on page load
+        window.onload = () => testUsers();
+    </script>
+</body>
+</html>
