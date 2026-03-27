@@ -60,7 +60,7 @@ const NAV = [
   { id: "trash", label: "Trash", icon: "🗑️" },
 ];
 
-export default function Home() {
+export default function App() {
   const { data: session, status } = useSession();
   const { t, mode, toggle } = useTheme();
   const [messages, setMessages] = useState([]);
@@ -183,7 +183,7 @@ export default function Home() {
           style={{
             display: "block", textAlign: "center", 
             color: t.sub, textDecoration: "none", 
-            fontSize: 12, marginBottom: 8,
+            fontSize: 12, marginBottom: 4,
             padding: "6px 0", borderRadius: 6,
             transition: "background 0.2s",
           }}
@@ -191,6 +191,20 @@ export default function Home() {
           onMouseOut={(e) => e.target.style.background = "none"}
         >
           Privacy Policy
+        </a>
+        <a 
+          href="/terms" 
+          style={{
+            display: "block", textAlign: "center", 
+            color: t.sub, textDecoration: "none", 
+            fontSize: 12, marginBottom: 8,
+            padding: "6px 0", borderRadius: 6,
+            transition: "background 0.2s",
+          }}
+          onMouseOver={(e) => e.target.style.background = t.inputBg}
+          onMouseOut={(e) => e.target.style.background = "none"}
+        >
+          Terms of Service
         </a>
         <div style={{ fontSize: 12, color: t.sub, marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {session.user.email}
