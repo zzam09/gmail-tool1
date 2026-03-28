@@ -64,10 +64,46 @@ export default function AdminDashboard() {
   const [nextPageToken, setNextPageToken] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [tokenStatus, setTokenStatus] = useState({});
+  const [pinAuth, setPinAuth] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   useEffect(() => {
-    if (session) loadUsers();
-  }, [session]);
+    // Check screen size for mobile responsiveness
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    // Check for existing PIN authentication session first
+    const checkExistingPinAuth = async () => {
+      try {
+        const response = await fetch('/api/admin/auth/check');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.authenticated) {
+            setPinAuth(true);
+            console.log('✅ Existing PIN session found');
+            loadUsers();
+            return true;
+          }
+        }
+      } catch (error) {
+        console.error('PIN session check failed:', error);
+      }
+      return false;
+    };
+
+    checkExistingPinAuth();
+  }, []);
 
   useEffect(() => {
     if (selectedUser) loadMessages();
@@ -224,27 +260,228 @@ export default function AdminDashboard() {
     }
   }
 
-  if (!session) {
+  const handlePinLogin = async (e) => {
+    e.preventDefault();
+    setPinError("");
+    
+    try {
+      const response = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinInput })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setPinAuth(true);
+        setPinInput("");
+        console.log('✅ PIN authentication successful');
+        loadUsers();
+      } else {
+        setPinError(data.error || "Invalid PIN");
+      }
+    } catch (error) {
+      setPinError("Authentication failed");
+      console.error('PIN auth failed:', error);
+    }
+  };
+
+  const handlePinLogout = async () => {
+    try {
+      await fetch('/api/admin/auth/logout', { method: 'POST' });
+      setPinAuth(false);
+      setPinInput("");
+      setUsers([]);
+      setSelectedUser(null);
+      setMessages([]);
+      setMessageDetail(null);
+    } catch (error) {
+      console.error('PIN logout failed:', error);
+    }
+  };
+
+  if (!session && !pinAuth) {
     return (
-      <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: THEMES.light.bg }}>
-        <div style={{ color: THEMES.light.sub, fontSize: 14 }}>Please sign in to access admin dashboard</div>
+      <div style={{ 
+        minHeight: "100dvh", 
+        display: "flex", 
+        alignItems: "center", 
+        justifyContent: "center", 
+        background: `linear-gradient(135deg, ${THEMES.light.bg} 0%, #e8e8ed 100%)`,
+        padding: "20px",
+        fontFamily: "-apple-system, BlinkMacSystemFont, system-ui"
+      }}>
+        <div style={{
+          background: "#ffffff",
+          borderRadius: "16px",
+          padding: "40px",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.1)",
+          width: "100%",
+          maxWidth: "400px",
+          textAlign: "center"
+        }}>
+          <div style={{ fontSize: 48, marginBottom: 24 }}>🔐</div>
+          <h1 style={{ 
+            margin: "0 0 8px", 
+            fontSize: 24, 
+            fontWeight: 700, 
+            color: THEMES.light.text 
+          }}>
+            Admin Access
+          </h1>
+          <p style={{ 
+            margin: "0 0 32px", 
+            fontSize: 14, 
+            color: THEMES.light.sub,
+            lineHeight: 1.5 
+          }}>
+            Enter your PIN to access the admin dashboard
+          </p>
+          
+          <form onSubmit={handlePinLogin}>
+            <div style={{ marginBottom: 24 }}>
+              <input
+                type="password"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                placeholder="Enter PIN"
+                style={{
+                  width: "100%",
+                  padding: "16px",
+                  border: `2px solid ${pinError ? "#ff3b30" : THEMES.light.border}`,
+                  borderRadius: "12px",
+                  fontSize: 16,
+                  background: THEMES.light.inputBg,
+                  color: THEMES.light.text,
+                  textAlign: "center",
+                  letterSpacing: "2px",
+                  outline: "none",
+                  transition: "border-color 0.2s"
+                }}
+                autoFocus
+              />
+              {pinError && (
+                <div style={{
+                  color: "#ff3b30",
+                  fontSize: 12,
+                  marginTop: 8,
+                  fontWeight: 500
+                }}>
+                  {pinError}
+                </div>
+              )}
+            </div>
+            
+            <button
+              type="submit"
+              style={{
+                width: "100%",
+                padding: "16px",
+                background: THEMES.light.accent,
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "12px",
+                fontSize: 16,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "background 0.2s",
+                marginBottom: 16
+              }}
+              onMouseOver={(e) => e.target.style.background = "#0056cc"}
+              onMouseOut={(e) => e.target.style.background = THEMES.light.accent}
+            >
+              Sign In
+            </button>
+          </form>
+          
+          <div style={{
+            fontSize: 11,
+            color: THEMES.light.sub,
+            borderTop: `1px solid ${THEMES.light.border}`,
+            paddingTop: 16,
+            marginTop: 24
+          }}>
+            Default PIN: <strong>12345</strong>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div style={{
-      height: "100dvh", display: "flex", background: t.bg,
+      minHeight: "100dvh", display: "flex", background: t.bg,
       color: t.text, fontFamily: "-apple-system, BlinkMacSystemFont, system-ui",
       overflow: "hidden",
+      position: "relative"
     }}>
-      {/* User Sidebar */}
+      {/* Mobile Menu Toggle */}
+      {isMobile && (
+        <div style={{
+          position: "absolute",
+          top: 16,
+          left: 16,
+          zIndex: 100,
+          background: t.card,
+          borderRadius: "8px",
+          padding: "8px",
+          border: `1px solid ${t.border}`
+        }}>
+          <button
+            onClick={() => setShowMobileMenu(!showMobileMenu)}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "20px",
+              cursor: "pointer",
+              padding: "4px",
+              borderRadius: "4px"
+            }}
+          >
+            {showMobileMenu ? "✕" : "☰"}
+          </button>
+        </div>
+      )}
+
+      {/* User Sidebar - Mobile Overlay or Desktop Sidebar */}
       <div style={{
-        width: 280, background: t.sidebar, borderRight: `1px solid ${t.border}`,
-        display: "flex", flexDirection: "column", padding: "16px",
+        ...(isMobile ? {
+          position: "fixed",
+          top: 0,
+          left: 0,
+          height: "100dvh",
+          width: "280px",
+          background: t.sidebar,
+          borderRight: `1px solid ${t.border}`,
+          display: "flex",
+          flexDirection: "column",
+          padding: "16px",
+          zIndex: 50,
+          transform: showMobileMenu ? "translateX(0)" : "translateX(-100%)",
+          transition: "transform 0.3s ease"
+        } : {
+          width: "280px",
+          background: t.sidebar,
+          borderRight: `1px solid ${t.border}`,
+          display: "flex",
+          flexDirection: "column",
+          padding: "16px"
+        })
       }}>
-        <div style={{ fontWeight: 700, fontSize: 18, padding: "8px 0 16px", color: t.text }}>
-          👥 Users
+        <div style={{ fontWeight: 700, fontSize: 18, padding: "8px 0 16px", color: t.text, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span>👥 Admin Panel</span>
+          {pinAuth && (
+            <span style={{ 
+              fontSize: 12, 
+              color: "#34c759", 
+              background: "rgba(52, 199, 89, 0.1)", 
+              padding: "2px 6px", 
+              borderRadius: 4 
+            }}>
+              🔓 PIN Auth
+            </span>
+          )}
         </div>
         
         {users.length === 0 ? (
@@ -334,18 +571,45 @@ export default function AdminDashboard() {
           <button onClick={toggle} style={{
             background: t.inputBg, border: "none", borderRadius: 8,
             padding: "8px 12px", fontSize: 13, cursor: "pointer", color: t.text, width: "100%",
+            marginBottom: 8
           }}>
             {mode === "light" ? "🌙 Dark" : "☀️ Light"}
           </button>
+          {pinAuth && (
+            <button onClick={handlePinLogout} style={{
+              background: "#ff3b30", border: "none", borderRadius: 8,
+              padding: "8px 12px", fontSize: 13, cursor: "pointer", color: "#fff", width: "100%",
+            }}>
+              🚪 Logout
+            </button>
+          )}
         </div>
       </div>
 
       {/* Main Content */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      <div style={{ 
+        flex: 1, 
+        display: "flex", 
+        overflow: "hidden",
+        flexDirection: isMobile ? "column" : "row"
+      }}>
         {/* Message List */}
         <div style={{
-          flex: "0 0 380px", background: t.bg, borderRight: `1px solid ${t.border}`,
-          display: "flex", flexDirection: "column", overflow: "hidden",
+          ...(isMobile ? {
+            flex: 1,
+            background: t.bg,
+            borderBottom: `1px solid ${t.border}`,
+            display: selectedMessage ? "none" : "flex",
+            flexDirection: "column",
+            overflow: "hidden"
+          } : {
+            flex: "0 0 380px",
+            background: t.bg,
+            borderRight: `1px solid ${t.border}`,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden"
+          })
         }}>
           <div style={{
             padding: "16px", background: t.topbar, borderBottom: `1px solid ${t.border}`,
@@ -401,7 +665,28 @@ export default function AdminDashboard() {
               ))
             )}
             
-            {nextPageToken && (
+            {isMobile && selectedMessage && (
+              <button
+                onClick={() => {
+                  setSelectedMessage(null);
+                  setMessageDetail(null);
+                }}
+                style={{
+                  background: t.accent,
+                  color: "#fff",
+                  border: "none",
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  fontSize: 14,
+                  cursor: "pointer",
+                  margin: "8px 16px"
+                }}
+              >
+                ← Back to Messages
+              </button>
+            )}
+            
+            {nextPageToken && !isMobile && (
               <div style={{ padding: 16, textAlign: "center" }}>
                 <button onClick={() => loadMessages(nextPageToken)} style={{
                   background: t.inputBg, border: "none", borderRadius: 8,
@@ -416,8 +701,25 @@ export default function AdminDashboard() {
 
         {/* Message Detail */}
         <div style={{
-          flex: 1, background: t.bg, display: "flex", flexDirection: "column",
-          overflow: "hidden",
+          ...(isMobile ? {
+            flex: 1,
+            background: t.bg,
+            display: selectedMessage ? "flex" : "none",
+            flexDirection: "column",
+            overflow: "hidden",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 40
+          } : {
+            flex: 1,
+            background: t.bg,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden"
+          })
         }}>
           {!selectedMessage ? (
             <div style={{
